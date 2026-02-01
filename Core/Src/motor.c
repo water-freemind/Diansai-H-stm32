@@ -8,10 +8,9 @@
 #include "stm32f1xx_it.h"
 #include "motor.h"
 #include "jy62.h"
-#include "upper.h"
 #include <stdint.h>
 #include "stdlib.h"
-
+#include "k230_uart.h"
 
 extern  uint16_t Key_flag;
 extern uint16_t Key_status;
@@ -387,6 +386,7 @@ volatile uint32_t timer_flag = 0;      // 15秒标志位
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
     if (htim->Instance == TIM4) {
+
         EncoderL = (int16_t)__HAL_TIM_GetCounter(&htim1);
         EncoderR = -(int16_t)__HAL_TIM_GetCounter(&htim2);
         

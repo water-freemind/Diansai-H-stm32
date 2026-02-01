@@ -18,8 +18,7 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
-#include "delay.h"
-#include "stm32f1xx_hal.h"
+#include "dma.h"
 #include "tim.h"
 #include "usart.h"
 #include "gpio.h"
@@ -28,7 +27,8 @@
 /* USER CODE BEGIN Includes */
 #include "OLED.h"
 #include "motor.h"
-#include "upper.h"
+#include "gimbal_driver.h"
+#include "k230_uart.h"
 #include "jy62.h"
 #include "position_control.h"
 /* USER CODE END Includes */
@@ -113,10 +113,6 @@ int main(void)
   /* MCU Configuration--------------------------------------------------------*/
 
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
-
-
-
-
   HAL_Init();
 
   /* USER CODE BEGIN Init */
@@ -132,6 +128,7 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_DMA_Init();
   MX_TIM3_Init();
   MX_TIM1_Init();
   MX_TIM2_Init();
@@ -144,168 +141,166 @@ int main(void)
   OLED_Init();//OLED初始化+清屏幕
   OLED_Clear();
   position_control_init();
+  
   HAL_Delay(500);//等待陀螺仪初始化成功
   reset_turn_flag();
+  K230_UART_Init(); // 初始化 K230 UART DMA 接收
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    // //OLED显示数据
-    // OLED_ShowString(0, 0, "L:", OLED_8X16);
-    // OLED_ShowNum(16, 0, total_pulse_L,8, OLED_8X16);
+    K230_UART_Poll(); // 处理K230数据
 
-    // OLED_ShowString(0, 18, "R:", OLED_8X16);
-    // OLED_ShowNum(16, 18, total_pulse_R,8, OLED_8X16);
+    if (k230_data.is_updated) {
+        // 显示有符号数（适配负数）
+        OLED_ShowSignedNum(0, 0, k230_data.pan_error, 6, OLED_8X16);
+        OLED_ShowSignedNum(0, 18, k230_data.tilt_error, 6, OLED_8X16);
+    }
 
+    // 原有yaw_angle显示保留
     OLED_ShowString(0, 36, "yaw_angle:", OLED_8X16);
     OLED_ShowFloatNum(80, 36, yaw_angle, 3, 2, OLED_8X16);
-
-    OLED_ShowNum(0, 0, MV_data_1, 1,OLED_8X16);
-    OLED_ShowNum(0, 18, direction_flag, 1,OLED_8X16);
-    
-
     OLED_Update();//显示任何东西都需要更新OLED数据，不然无法显示
 
-    if(Key_status == 1 && task_stage == TASK_IDLE){
-        timer_flag = 0;
-        set_target_distance(1480);  // 第一段移动
-        task_stage = TASK_FIRST_MOVE;  // 进入第一段移动状态
-        Key_status = 0;
-    }
-    if(timer_flag == 1 && MV_data_1!=0){
-      if(direction_flag == 0){
-        direction_flag = MV_data_1;
-      }
-      switch(task_stage) {
-      case TASK_FIRST_MOVE:
-          led_state = LED_FAST_BLINK;
-          if(position_state == POSITION_COMPLETED){
-              // 第一段移动完成，准备转向
-              task_stage = TASK_TURNING;
-              reset_turn_flag();  // 重置转向标志
-              turning_stable_counter = 0;
-              // 停止位置环控制
-              position_control_enable = 0;
-              // 设置转向目标角度
-              if(direction_flag == 1){target_turn_angle = -60;}//左
-              if(direction_flag == 2){target_turn_angle = -90;}//中
-              if(direction_flag == 3){target_turn_angle = -120;}//右
-              turnflag = 2; 
-          }
-          break;
+  //   if(Key_status == 1 && task_stage == TASK_IDLE){
+  //       timer_flag = 0;
+  //       set_target_distance(1480);  // 第一段移动
+  //       task_stage = TASK_FIRST_MOVE;  // 进入第一段移动状态
+  //       Key_status = 0;
+  //   }
+  //   if(timer_flag == 1 && MV_data_1!=0){
+  //     if(direction_flag == 0){
+  //       direction_flag = MV_data_1;
+  //     }
+  //     switch(task_stage) {
+  //     case TASK_FIRST_MOVE:
+  //         led_state = LED_FAST_BLINK;
+  //         if(position_state == POSITION_COMPLETED){
+  //             // 第一段移动完成，准备转向
+  //             task_stage = TASK_TURNING;
+  //             reset_turn_flag();  // 重置转向标志
+  //             turning_stable_counter = 0;
+  //             // 停止位置环控制
+  //             position_control_enable = 0;
+  //             // 设置转向目标角度
+  //             if(direction_flag == 1){target_turn_angle = -60;}//左
+  //             if(direction_flag == 2){target_turn_angle = -90;}//中
+  //             if(direction_flag == 3){target_turn_angle = -120;}//右
+  //             turnflag = 2; 
+  //         }
+  //         break;
           
-      case TASK_TURNING:
-          // 执行转向控制
-          led_state = LED_ON;
-          turn_angle(target_turn_angle);
-          // 检查转向是否成功
-          if(turn_success_flag == 1) {
-              // 转向成功，开始计时稳定
-              turning_stable_counter++;
+  //     case TASK_TURNING:
+  //         // 执行转向控制
+  //         led_state = LED_ON;
+  //         turn_angle(target_turn_angle);
+  //         // 检查转向是否成功
+  //         if(turn_success_flag == 1) {
+  //             // 转向成功，开始计时稳定
+  //             turning_stable_counter++;
               
-              // 稳定期间保持当前角度
-              if(turning_stable_counter >= TURN_STABLE_TIME) {
-                  // 稳定时间足够，进入下一阶段
-                  led_state = LED_SLOW_BLINK;
-                  switch (turnflag)
-                  {
-                      case 2:
-                        task_stage = TASK_SECOND_MOVE;
-                        if(direction_flag == 1){
-                          line_angle = -60;
-                          set_target_distance(1700);
-                        }//左
-                        if(direction_flag == 2){
-                          line_angle = -90;
-                          set_target_distance(1420);
-                        }//中
-                        if(direction_flag == 3){
-                          line_angle = -120;
-                          set_target_distance(1650);
-                        }//右
-                        break;
-                      case 3:
-                        HAL_Delay(5000);
-                        task_stage = TASK_THIRD_MOVE;
-                        if(direction_flag == 1){
-                          line_angle = 120;
-                          set_target_distance(1600);
-                        }//左
-                        if(direction_flag == 2){
-                          line_angle = 90;
-                          set_target_distance(1420);
-                        }//中
-                        if(direction_flag == 3){
-                          line_angle = 60;
-                          set_target_distance(1650);
-                        }//右
-                        break;
-                      case 4:
-                        task_stage = TASK_FORTH_MOVE;
-                        line_angle = 0;
-                        set_target_distance(-1600);
-                        break;
-                      default:
-                        break;
-                  }
-              }
-          } else {
-              // 转向未成功，重置稳定计时器
-              turning_stable_counter = 0;
-          }
-          break;
+  //             // 稳定期间保持当前角度
+  //             if(turning_stable_counter >= TURN_STABLE_TIME) {
+  //                 // 稳定时间足够，进入下一阶段
+  //                 led_state = LED_SLOW_BLINK;
+  //                 switch (turnflag)
+  //                 {
+  //                     case 2:
+  //                       task_stage = TASK_SECOND_MOVE;
+  //                       if(direction_flag == 1){
+  //                         line_angle = -60;
+  //                         set_target_distance(1700);
+  //                       }//左
+  //                       if(direction_flag == 2){
+  //                         line_angle = -90;
+  //                         set_target_distance(1420);
+  //                       }//中
+  //                       if(direction_flag == 3){
+  //                         line_angle = -120;
+  //                         set_target_distance(1650);
+  //                       }//右
+  //                       break;
+  //                     case 3:
+  //                       HAL_Delay(5000);
+  //                       task_stage = TASK_THIRD_MOVE;
+  //                       if(direction_flag == 1){
+  //                         line_angle = 120;
+  //                         set_target_distance(1600);
+  //                       }//左
+  //                       if(direction_flag == 2){
+  //                         line_angle = 90;
+  //                         set_target_distance(1420);
+  //                       }//中
+  //                       if(direction_flag == 3){
+  //                         line_angle = 60;
+  //                         set_target_distance(1650);
+  //                       }//右
+  //                       break;
+  //                     case 4:
+  //                       task_stage = TASK_FORTH_MOVE;
+  //                       line_angle = 0;
+  //                       set_target_distance(-1600);
+  //                       break;
+  //                     default:
+  //                       break;
+  //                 }
+  //             }
+  //         } else {
+  //             // 转向未成功，重置稳定计时器
+  //             turning_stable_counter = 0;
+  //         }
+  //         break;
         
-      case TASK_SECOND_MOVE:
-          led_state = LED_ON;
-          // 第二段移动逻辑保持不变
-          if(position_state == POSITION_COMPLETED){
-              task_stage = TASK_TURNING;
-              reset_turn_flag();  // 重置转向标志
-              turning_stable_counter = 0;
-              // 停止位置环控制
-              position_control_enable = 0;
-              // 设置转向目标角度
-              if(direction_flag == 1){target_turn_angle = 120;}//左
-              if(direction_flag == 2){target_turn_angle = 90;}//中
-              if(direction_flag == 3){target_turn_angle = 60;}//右
-              turnflag = 3;
-          }
-          break;
+  //     case TASK_SECOND_MOVE:
+  //         led_state = LED_ON;
+  //         // 第二段移动逻辑保持不变
+  //         if(position_state == POSITION_COMPLETED){
+  //             task_stage = TASK_TURNING;
+  //             reset_turn_flag();  // 重置转向标志
+  //             turning_stable_counter = 0;
+  //             // 停止位置环控制
+  //             position_control_enable = 0;
+  //             // 设置转向目标角度
+  //             if(direction_flag == 1){target_turn_angle = 120;}//左
+  //             if(direction_flag == 2){target_turn_angle = 90;}//中
+  //             if(direction_flag == 3){target_turn_angle = 60;}//右
+  //             turnflag = 3;
+  //         }
+  //         break;
 
-      case TASK_THIRD_MOVE:
-          if(position_state == POSITION_COMPLETED){
-              task_stage = TASK_TURNING;
-              reset_turn_flag();  // 重置转向标志
-              turning_stable_counter = 0;
-              // 停止位置环控制
-              position_control_enable = 0;
-              target_turn_angle = 0; 
-              turnflag = 4;
-          }
-          break;
-        case TASK_FORTH_MOVE:
-          if(position_state == POSITION_COMPLETED){
-              task_stage = TASK_COMPLETED;
-              reset_turn_flag();  // 重置转向标志
-              turning_stable_counter = 0;
-              // 停止位置环控制
-              position_control_enable = 0;
-          }
-          break;
-      case TASK_COMPLETED:
-          // 任务完成
-          break;
-      }
-    }
+  //     case TASK_THIRD_MOVE:
+  //         if(position_state == POSITION_COMPLETED){
+  //             task_stage = TASK_TURNING;
+  //             reset_turn_flag();  // 重置转向标志
+  //             turning_stable_counter = 0;
+  //             // 停止位置环控制
+  //             position_control_enable = 0;
+  //             target_turn_angle = 0; 
+  //             turnflag = 4;
+  //         }
+  //         break;
+  //       case TASK_FORTH_MOVE:
+  //         if(position_state == POSITION_COMPLETED){
+  //             task_stage = TASK_COMPLETED;
+  //             reset_turn_flag();  // 重置转向标志
+  //             turning_stable_counter = 0;
+  //             // 停止位置环控制
+  //             position_control_enable = 0;
+  //         }
+  //         break;
+  //     case TASK_COMPLETED:
+  //         // 任务完成
+  //         break;
+  //     }
+  //   }
     
-    // 位置环控制更新（在主循环中调用）
-    position_control_update();
+  //   // 位置环控制更新（在主循环中调用）
+  //   position_control_update();
     /* USER CODE END WHILE */
-    
+
     /* USER CODE BEGIN 3 */
-    UP_SendData(total_pulse_L,total_pulse_R,yaw_angle);//向上位机发送编码器数据以及偏航角角度值
   }
   /* USER CODE END 3 */
 }

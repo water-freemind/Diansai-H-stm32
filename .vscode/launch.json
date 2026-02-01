@@ -1,22 +1,28 @@
 {
-    // 使用 IntelliSense 了解相关属性。 
-    // 悬停以查看现有属性的描述。
-    // 欲了解更多信息，请访问: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
         {
-            "type": "stlinkgdbtarget",
+            "name": "Cortex Debug (OpenOCD/DAPLink)",
+            "type": "cortex-debug",
             "request": "launch",
-            "name": "STM32Cube: STM32 Launch ST-Link GDB Server",
-            "origin": "snippet",
+            "servertype": "openocd", 
             "cwd": "${workspaceFolder}",
-            "preBuild": "${command:st-stm32-ide-debug-launch.build}",
-            "runEntry": "main",
-            "imagesAndSymbols": [
-                {
-                    "imageFileName": "${command:st-stm32-ide-debug-launch.get-projects-binary-from-context1}"
-                }
-            ]
+        
+            "serverpath": "D:/buildtools/xpack-openocd-0.12.0-7/bin/openocd.exe",
+
+            "armToolchainPath": "D:/buildtools/xpack-arm-none-eabi-gcc-14.2.1-1.1/bin",
+
+            "executable": "D:/Keil project/races/Smartcar1.0/build/Debug/Smartcar1.0.elf",
+            
+            "device": "STM32F103C8", 
+            
+            "configFiles": [
+                "interface/cmsis-dap.cfg",
+                "target/stm32f1x.cfg"
+            ],
+            
+            "runToEntryPoint": "main", 
+            "showDevDebugOutput": "none" 
         }
     ]
 }

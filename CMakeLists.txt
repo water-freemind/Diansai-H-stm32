@@ -55,8 +55,9 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     ${Core_Src}
     Core/Src/motor.c
     Core/Src/jy62.c
-    Core/Src/upper.c   
-    Core/Src/position_control.c    
+    Core/Src/gimbal_driver.c 
+    Core/Src/position_control.c
+    Core/Src/k230_uart.c
 )
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user sources here
