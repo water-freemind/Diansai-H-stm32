@@ -24,13 +24,13 @@ static uint8_t Calc_CheckSum(uint8_t *data, uint8_t len) {
 static void Gimbal_SendPacket(uint8_t *packet, uint8_t len) {
     // 检查串口是否忙碌（防止上一次 DMA 还没发完就覆盖数据）
     // 如果想要完全非阻塞，这里可以使用队列，但简单应用中等待 Ready 即可
-    while (HAL_UART_GetState(&huart3) != HAL_UART_STATE_READY);
+    while (HAL_UART_GetState(&huart2) != HAL_UART_STATE_READY);
     
     // 复制数据到全局缓冲区（因为 DMA 发送是异步的，不能发送栈上的局部变量）
     memcpy(gimbal_tx_buf, packet, len);
     
     // 启动 DMA 发送
-    HAL_UART_Transmit_DMA(&huart3, gimbal_tx_buf, len);
+    HAL_UART_Transmit_DMA(&huart2, gimbal_tx_buf, len);
 }
 
 /**

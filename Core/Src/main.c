@@ -152,7 +152,7 @@ int main(void)
   while (1)
   {
     K230_UART_Poll(); // 处理K230数据
-
+    Gimbal_RunSpeed(GIMBAL_LOWER_ADDR, DIR_CW, 40); // 云台低速旋转，防止进入休眠
     if (k230_data.is_updated) {
         // 显示有符号数（适配负数）
         OLED_ShowSignedNum(0, 0, k230_data.pan_error, 6, OLED_8X16);
