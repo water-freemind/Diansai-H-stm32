@@ -66,6 +66,12 @@ int16_t MV_data_6 = 0;
 int16_t MV_data_7 = 0;
 extern volatile uint32_t timer_flag;
 extern volatile uint32_t timer_flag2;
+/* USER CODE BEGIN PV */
+// 这里只能定义变量，不能调用函数！
+volatile float pan_output = 0.0f;   
+volatile float tilt_output = 0.0f;
+/* USER CODE END PV */
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -152,22 +158,22 @@ int main(void)
   while (1)
   {
     K230_UART_Poll(); // 处理K230数据
-    volatile int16_t pan_output = PID_Compute(&pan_pid, k230_data.pan_error);
-    volatile int16_t tilt_output = PID_Compute(&tilt_pid, k230_data.tilt_error);
-
     if (k230_data.is_updated) {
         // 显示有符号数（适配负数
+        // 当收到新数据时，才进行 PID 计算，并把结果存入全局变量
+        pan_output = PID_Compute(&pan_pid, k230_data.pan_error);
+        tilt_output = PID_Compute(&tilt_pid, k230_data.tilt_error);
         OLED_ShowString(0, 0, "x:", OLED_8X16);
         OLED_ShowSignedNum(16, 0, k230_data.pan_error, 3, OLED_8X16);
         OLED_ShowString(64, 0, "y:", OLED_8X16);
         OLED_ShowSignedNum(80, 0,k230_data.tilt_error, 3, OLED_8X16);
         k230_data.is_updated = 0; // 重置更新标志
+        Gimbal_Run_Signed(GIMBAL_LOWER_ADDR, pan_output);
+        Gimbal_Run_Signed(GIMBAL_UPPER_ADDR, tilt_output);
     }
 
-    OLED_ShowString(0, 18, "pan_output:", OLED_8X16);
-    OLED_ShowSignedNum(88, 18, pan_output, 3, OLED_8X16);
-    OLED_ShowString(0, 36, "tilt_output:", OLED_8X16);
-    OLED_ShowSignedNum(88, 36, tilt_output, 3, OLED_8X16);
+    OLED_ShowFloatNum(0, 18, pan_output, 3,2,OLED_8X16);
+    OLED_ShowFloatNum(0, 36, tilt_output, 3, 2, OLED_8X16);
     OLED_Update();//显示任何东西都需要更新OLED数据，不然无法显示
 
   //   if(Key_status == 1 && task_stage == TASK_IDLE){

@@ -22,15 +22,9 @@ static uint8_t Calc_CheckSum(uint8_t *data, uint8_t len) {
  * @brief 通过 DMA 发送数据包
  */
 static void Gimbal_SendPacket(uint8_t *packet, uint8_t len) {
-    // 检查串口是否忙碌（防止上一次 DMA 还没发完就覆盖数据）
-    // 如果想要完全非阻塞，这里可以使用队列，但简单应用中等待 Ready 即可
-    while (HAL_UART_GetState(&huart2) != HAL_UART_STATE_READY);
-    
-    // 复制数据到全局缓冲区（因为 DMA 发送是异步的，不能发送栈上的局部变量）
-    memcpy(gimbal_tx_buf, packet, len);
-    
-    // 启动 中断 发送
-    HAL_UART_Transmit_IT(&huart2, gimbal_tx_buf, len);
+    // 直接用阻塞发送，超时给 10ms
+    // 这种写法天然兼容 DMA 接收，不会死锁
+    HAL_UART_Transmit(&huart2, packet, len, 10);
 }
 
 /**
@@ -59,7 +53,41 @@ void Gimbal_RunSpeed(uint8_t addr, uint8_t direction, uint8_t speed) {
 
     Gimbal_SendPacket(packet, 4);
 }
+/**
+ * @brief 智能速度控制 (自动处理正负号)
+ * @param addr: 电机地址
+ * @param signed_speed: 有符号速度 (-127 到 +127)
+ *                      正数: 顺时针 (DIR_CW)
+ *                      负数: 逆时针 (DIR_CCW)
+ */
+void Gimbal_Run_Signed(uint8_t addr, int16_t signed_speed) {
+    uint8_t direction;
+    uint8_t speed_abs;
 
+    // 1. 判断方向
+    if (signed_speed >= 0) {
+        direction = DIR_CW; // 顺时针 (根据实际电机线序可能需要互换)
+        speed_abs = (uint8_t)signed_speed;
+    } else {
+        direction = DIR_CCW; // 逆时针
+        speed_abs = (uint8_t)(-signed_speed); // 取绝对值 (或者用 abs(signed_speed))
+    }
+
+    // 2. 限制幅度 (防止 PID 输出过大超过 127)
+    if (speed_abs > 127) {
+        speed_abs = 127;
+    }
+    
+    // 3. 死区处理 (可选，防止速度太小电机发出滋滋声但不转)
+    if (speed_abs < 5) { // 小于 5 就停止
+        Gimbal_Stop(addr); // 速度太小直接停
+        return;
+    }
+
+    // 4. 调用底层的发送函数
+    // 复用你原来的 Gimbal_RunSpeed 函数
+    Gimbal_RunSpeed(addr, direction, speed_abs);
+}
 /**
  * @brief 停止电机
  * 指令: Address + 0xF7 + CRC
@@ -76,18 +104,18 @@ void Gimbal_Stop(uint8_t addr) {
 
 //初始化 PID 参数
 PID_Controller pan_pid = {
-    0.15f,  // Kp
+    0.08f,  // Kp
     0.005f, // Ki
-    0.0f,   // Kd
+    0.05f,   // Kd
     0,      // prev_error
     0,      // integral
-    127.0f, // output_limit
+    60.0f, // output_limit
     50.0f   // integral_limit
 };
 PID_Controller tilt_pid = {
-    0.20f,  // Kp
-    0.008f, // Ki
-    0.0f,   // Kd
+    0.08f,  // Kp
+    0.005f, // Ki
+    0.05f,   // Kd
     0,      // prev_error
     0,      // integral
     127.0f, // output_limit

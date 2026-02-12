@@ -22,7 +22,7 @@ void Gimbal_RunSpeed(uint8_t addr, uint8_t direction, uint8_t speed);
 // speed: 0-127
 // pulses: 脉冲数 (需根据细分设置换算角度)
 void Gimbal_MoveRelative(uint8_t addr, uint8_t direction, uint8_t speed, uint32_t pulses);
-
+void Gimbal_Run_Signed(uint8_t addr, int16_t signed_speed) ;
 // 停止 (对应手册 e0 f7)
 void Gimbal_Stop(uint8_t addr);
 
