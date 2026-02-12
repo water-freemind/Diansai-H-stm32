@@ -36,5 +36,8 @@ typedef struct {
     float integral_limit;
 } PID_Controller;
 
+int8_t PID_Compute(PID_Controller *pid, float error);
 
+extern PID_Controller pan_pid;
+extern PID_Controller tilt_pid;
 #endif

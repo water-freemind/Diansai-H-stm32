@@ -11,6 +11,7 @@
 #include <stdint.h>
 #include "stdlib.h"
 #include "k230_uart.h"
+#include "gimbal_driver.h"
 
 extern  uint16_t Key_flag;
 extern uint16_t Key_status;
@@ -382,6 +383,8 @@ extern volatile int32_t total_pulse_L , total_pulse_R ;
 volatile uint32_t timer_10ms_counter = 0;  // 10ms计数
 volatile uint32_t seconds_counter = 0;     // 秒计数
 volatile uint32_t timer_flag = 0;      // 15秒标志位
+extern int16_t pan_output;
+extern int16_t tilt_output;
 //定时器中断回调函数执行定时器中断任务
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
@@ -399,6 +402,8 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
         
         Key_detect();
         
+        Gimbal_RunSpeed(GIMBAL_LOWER_ADDR, DIR_CW, pan_output); // 云台低速旋转，防止进入休眠
+
         // 原有的LED控制等代码保持不变...
         switch(led_state) {
             case LED_OFF:

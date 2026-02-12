@@ -29,8 +29,8 @@ static void Gimbal_SendPacket(uint8_t *packet, uint8_t len) {
     // 复制数据到全局缓冲区（因为 DMA 发送是异步的，不能发送栈上的局部变量）
     memcpy(gimbal_tx_buf, packet, len);
     
-    // 启动 DMA 发送
-    HAL_UART_Transmit_DMA(&huart2, gimbal_tx_buf, len);
+    // 启动 中断 发送
+    HAL_UART_Transmit_IT(&huart2, gimbal_tx_buf, len);
 }
 
 /**
@@ -132,3 +132,4 @@ int8_t PID_Compute(PID_Controller *pid, float error) {
 
     return (int8_t)total_out;
 }
+

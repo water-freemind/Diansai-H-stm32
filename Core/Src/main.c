@@ -152,16 +152,22 @@ int main(void)
   while (1)
   {
     K230_UART_Poll(); // 处理K230数据
-    Gimbal_RunSpeed(GIMBAL_LOWER_ADDR, DIR_CW, 40); // 云台低速旋转，防止进入休眠
+    volatile int16_t pan_output = PID_Compute(&pan_pid, k230_data.pan_error);
+    volatile int16_t tilt_output = PID_Compute(&tilt_pid, k230_data.tilt_error);
+
     if (k230_data.is_updated) {
-        // 显示有符号数（适配负数）
-        OLED_ShowSignedNum(0, 0, k230_data.pan_error, 6, OLED_8X16);
-        OLED_ShowSignedNum(0, 18, k230_data.tilt_error, 6, OLED_8X16);
+        // 显示有符号数（适配负数
+        OLED_ShowString(0, 0, "x:", OLED_8X16);
+        OLED_ShowSignedNum(16, 0, k230_data.pan_error, 3, OLED_8X16);
+        OLED_ShowString(64, 0, "y:", OLED_8X16);
+        OLED_ShowSignedNum(80, 0,k230_data.tilt_error, 3, OLED_8X16);
+        k230_data.is_updated = 0; // 重置更新标志
     }
 
-    // 原有yaw_angle显示保留
-    OLED_ShowString(0, 36, "yaw_angle:", OLED_8X16);
-    OLED_ShowFloatNum(80, 36, yaw_angle, 3, 2, OLED_8X16);
+    OLED_ShowString(0, 18, "pan_output:", OLED_8X16);
+    OLED_ShowSignedNum(88, 18, pan_output, 3, OLED_8X16);
+    OLED_ShowString(0, 36, "tilt_output:", OLED_8X16);
+    OLED_ShowSignedNum(88, 36, tilt_output, 3, OLED_8X16);
     OLED_Update();//显示任何东西都需要更新OLED数据，不然无法显示
 
   //   if(Key_status == 1 && task_stage == TASK_IDLE){
